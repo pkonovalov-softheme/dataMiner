@@ -20,6 +20,25 @@ namespace DataConverter
             _connection = connection;
         }
 
+        private static DataTable CreateSesionStatsTable()
+        {
+            var orderTable = new DataTable("sessions_stats");
+
+            var colId = new DataColumn("session_id", typeof(Guid));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("CorrectEventsCount", typeof(Int32));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("InvalidEventsCount", typeof(Int32));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("Rate", typeof(double));
+            orderTable.Columns.Add(colId);
+
+            return orderTable;
+        }
+
         private static DataTable CreateSerialEventsTable()
         {
             var orderTable = new DataTable("serial_events2");
@@ -336,40 +355,21 @@ namespace DataConverter
         }
 
 
-        private IList<MouseEvent> ReadMouseEvents(byte[] streamDataChunk, Guid sessionId)
+        private List<MouseEvent> ReadMousePositionEvents(byte[] streamDataChunk, Guid sessionId)
         {
-            MouseEvent currentEvent;
             List<MouseEvent> result = new List<MouseEvent>();
             var stream = new MemoryStream(streamDataChunk);
             var reader = new BinaryReader(stream);
 
             do
             {
-                try
+                var currentEvent = MouseEvent.ReadMouseEvent(reader);
+
+                if (currentEvent.EventType == MouseEventTypes.Mousemove ||
+                    currentEvent.EventType == MouseEventTypes.Scroll)
                 {
-                    currentEvent = MouseEvent.ReadMouseEvent(reader);
+                    result.Add(currentEvent);
                 }
-                catch (Exception)
-                {
-                    _badSessionsId.Add(sessionId);
-                    break;
-                }
-
-                if (!currentEvent.IsValid)
-                {
-                    //var deleteCommand = new SqlCommand(
-                    // "Delete FROM [webdata].[dbo].[serial_events] where session_id = @sid",
-                    //_connection);
-
-                    //deleteCommand.Parameters.Add("@sid", sessionId);
-                    //deleteCommand.ExecuteNonQuery();
-
-                    _badSessionsId.Add(sessionId);
-                    break;
-                }
-
-                result.Add(currentEvent);
-
             } while (stream.Position != stream.Length);
 
 
@@ -378,9 +378,15 @@ namespace DataConverter
 
         public void CreateGuestures()
         {
-            byte[] streamDataChunk;
+            ulong rowPeriod = 1000;
+            List<MouseEvent> sessionMouseEvents = new List<MouseEvent>();
+            Guid prevSesId = Guid.Empty;
             ulong curRow = 0;
             var watch = Stopwatch.StartNew();
+
+            DataTable sessionsStats = CreateSesionStatsTable();
+            var bulkCopy = new SqlBulkCopy(@"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;", SqlBulkCopyOptions.KeepIdentity) { DestinationTableName = sessionsStats.TableName };
+
 
             var commandCount = new SqlCommand(
                      "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
@@ -390,7 +396,7 @@ namespace DataConverter
 
 
             var serialCommand = new SqlCommand(
-                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events]",
+                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where [session_id] = 'B3CCAE48-9017-4628-90B9-E6EB0A1B8FFB'",
                             _connection);
 
              using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
@@ -406,12 +412,37 @@ namespace DataConverter
                     int eventNameIndex = sessionEventsReader.GetOrdinal("event_name");
                     string eventName = sessionEventsReader.GetString(eventNameIndex);
 
-
                     int eventIdIndex = sessionEventsReader.GetOrdinal("event_id");
                     Guid eventId = sessionEventsReader.GetGuid(eventIdIndex);
 
-                   // int streamDataChunkIndex = sessionEventsReader.GetOrdinal("event_name");
 
+                    if (prevSesId != Guid.Empty && prevSesId != sessionId)
+                    {
+
+                        int validMouseEventsCount = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
+                        double validRate = (double)validMouseEventsCount / sessionMouseEvents.Count;
+
+                        DataRow curStatRow = sessionsStats.NewRow();
+                        curStatRow["session_id"] = prevSesId;
+                        curStatRow["CorrectEventsCount"] = validMouseEventsCount;
+                        curStatRow["InvalidEventsCount"] = sessionMouseEvents.Count - validMouseEventsCount;
+
+                        if (double.IsNaN(validRate))
+                        {
+                            curStatRow["Rate"] = DBNull.Value;
+                        }
+                        else
+                        {
+                            curStatRow["Rate"] = validRate;
+                        }
+
+                        sessionsStats.Rows.Add(curStatRow);
+                        sessionMouseEvents = new List<MouseEvent>();
+                    }
+
+                    prevSesId = sessionId;
+
+                    byte[] streamDataChunk;
                     if (sessionEventsReader["stream_data_chunk"] == DBNull.Value)
                     {
                         streamDataChunk = null;
@@ -419,33 +450,61 @@ namespace DataConverter
                     else
                     {
                         streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];
-                        IList<MouseEvent> events = ReadMouseEvents(streamDataChunk, sessionId);
+                        List<MouseEvent> events = ReadMousePositionEvents(streamDataChunk, sessionId);
+                        sessionMouseEvents.AddRange(events);
                     }
 
+                    int validMouseEventsCount2 = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
+                    double validRate2 = (double)validMouseEventsCount2 / sessionMouseEvents.Count;
+
+                    int scrols = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Scroll);
+                    int notScrols = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Mousemove);
+
                     curRow++;
-                    double proc = (double)curRow / totalRowsCount;
-                    Console.WriteLine(" {0} % done", (int)(proc * 100));
-                    var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
-                  //  Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+
+                    if (curRow%rowPeriod == 0)
+                    {
+                        double proc = (double) curRow/totalRowsCount;
+                        Console.WriteLine(" {0} % done", (int) (proc*100));
+                        var remainingMsecs = (ulong) (watch.ElapsedMilliseconds/proc);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+                    }
+                    
                 }
             }
 
-            int countT = _badSessionsId.Count;
-            int curT = 0;
+             int validMouseEventsCount3 = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
+             double validRate3 = (double)validMouseEventsCount3 / sessionMouseEvents.Count;
 
-            foreach (var badSes in _badSessionsId)
+             int scrols3 = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Scroll);
+             int notScrols3 = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Mousemove);
+
+            try
             {
-                var deleteCommand = new SqlCommand(
-                 "Delete FROM [webdata].[dbo].[serial_events] where session_id = @sid",
-                _connection);
-
-                deleteCommand.Parameters.Add("@sid", badSes);
-                deleteCommand.ExecuteNonQuery();
-
-                curT++;
-
-                double proc = (double)curT / countT;
+                bulkCopy.WriteToServer(sessionsStats);
             }
+            catch (Exception ex)
+            {
+
+                bulkCopy.WriteToServer(sessionsStats);
+            }
+
+            //int countT = _badSessionsId.Count;
+            //int curT = 0;
+
+            //foreach (var badSes in _badSessionsId)
+            //{
+            //    var deleteCommand = new SqlCommand(
+            //     "Delete FROM [webdata].[dbo].[serial_events] where session_id = @sid",
+            //    _connection);
+
+            //    deleteCommand.Parameters.Add("@sid", badSes);
+            //    deleteCommand.ExecuteNonQuery();
+
+            //    curT++;
+
+            //    double proc = (double)curT / countT;
+            //}
             
         }
 

@@ -23,7 +23,7 @@ namespace DataConverter
            MouseOver = 8  
         }
 
-        public class MouseEvent
+        public struct MouseEvent
         {
             /// <summary>
             /// Event type id
@@ -69,25 +69,15 @@ namespace DataConverter
             {
                 get
                 {
-                    if (X < 0 || Y < 0 || X > Width || Y > Height)
+                    if (X < 0 || Y < 0)
                     {
                         return false;
                     }
 
-                    if (Width > 20000 || Height > 20000)
+                    if (UrlLength < 0)
                     {
                         return false;
                     }
-
-                    if (UrlLength < 0 || UrlLength > 2000)
-                    {
-                        return false;
-                    }
-
-                    //if (UrlLength > 0 && Url != "na" && !Url.StartsWith("http"))
-                    //{
-                    //    return false;
-                    //}
 
                     return true;
                 }
@@ -95,13 +85,6 @@ namespace DataConverter
 
            public static MouseEvent ReadMouseEvent(BinaryReader reader)
            {
-               //Byte[] buffer = new Byte[Marshal.SizeOf(typeof(MouseEvent))];
-               //reader.Read(buffer, 0, buffer.Length);
-               //GCHandle handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
-               //MouseEvent result = (MouseEvent)Marshal.PtrToStructure(handle.AddrOfPinnedObject(), typeof(MouseEvent));
-               //handle.Free();
-               //return result;
-
                var mevent = new MouseEvent();
                mevent.EventType = (MouseEventTypes)reader.ReadByte();
                mevent.SessionTimeStamp = TimeSpan.FromMilliseconds(reader.ReadInt32());
@@ -110,12 +93,6 @@ namespace DataConverter
                mevent.Width = reader.ReadInt16();
                mevent.Height = reader.ReadInt16();
                mevent.UrlLength = reader.ReadInt16();
-
-               if (!mevent.IsValid)
-               {
-                   return mevent;
-               }
-
 
                mevent.Url = Encoding.UTF8.GetString(reader.ReadBytes(mevent.UrlLength));
                return mevent;

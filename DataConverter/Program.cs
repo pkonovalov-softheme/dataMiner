@@ -25,7 +25,7 @@ namespace DataConverter
                 using (connection)
                 {
                     var proc = new DbProcessor(connection);
-                    proc.CreateRawEvents();
+                    proc.CreateGuestures();
                 }
             }
 
