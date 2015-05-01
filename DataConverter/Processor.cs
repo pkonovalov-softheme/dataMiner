@@ -3,10 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace DataConverter
 {
@@ -18,6 +20,31 @@ namespace DataConverter
         public DbProcessor(SqlConnection connection)
         {
             _connection = connection;
+        }
+
+        private static DataTable CreateGuesturesTable()
+        {
+            var orderTable = new DataTable("guestures");
+
+            var colId = new DataColumn("guesture_id", typeof(Guid));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("type", typeof(string));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("session_id", typeof(Guid));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("created", typeof(DateTime));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("ended", typeof(DateTime));
+            orderTable.Columns.Add(colId);
+
+            colId = new DataColumn("points", typeof(byte[]));
+            orderTable.Columns.Add(colId);
+
+            return orderTable;
         }
 
         private static DataTable CreateSesionStatsTable()
@@ -369,6 +396,10 @@ namespace DataConverter
                     currentEvent.EventType == MouseEventTypes.Scroll)
                 {
                     result.Add(currentEvent);
+                    //if (currentEvent.SessionTimeStamp.TotalMilliseconds == 1480.0)
+                    //{
+                    //    Debugger.Break();
+                    //}
                 }
             } while (stream.Position != stream.Length);
 
@@ -376,7 +407,7 @@ namespace DataConverter
             return result;
         }
 
-        public void CreateGuestures()
+        public void CreateStats()
         {
             ulong rowPeriod = 1000;
             List<MouseEvent> sessionMouseEvents = new List<MouseEvent>();
@@ -396,7 +427,7 @@ namespace DataConverter
 
 
             var serialCommand = new SqlCommand(
-                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where [session_id] = 'B3CCAE48-9017-4628-90B9-E6EB0A1B8FFB'",
+                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where session_id = '58e2d4b9-81ab-4918-b0f1-0010a7596f26'",
                             _connection);
 
              using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
@@ -454,12 +485,6 @@ namespace DataConverter
                         sessionMouseEvents.AddRange(events);
                     }
 
-                    int validMouseEventsCount2 = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
-                    double validRate2 = (double)validMouseEventsCount2 / sessionMouseEvents.Count;
-
-                    int scrols = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Scroll);
-                    int notScrols = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Mousemove);
-
                     curRow++;
 
                     if (curRow%rowPeriod == 0)
@@ -473,39 +498,231 @@ namespace DataConverter
                 }
             }
 
-             int validMouseEventsCount3 = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
-             double validRate3 = (double)validMouseEventsCount3 / sessionMouseEvents.Count;
-
-             int scrols3 = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Scroll);
-             int notScrols3 = sessionMouseEvents.Count(curEvent => curEvent.EventType == MouseEventTypes.Mousemove);
-
-            try
-            {
-                bulkCopy.WriteToServer(sessionsStats);
-            }
-            catch (Exception ex)
-            {
-
-                bulkCopy.WriteToServer(sessionsStats);
-            }
-
-            //int countT = _badSessionsId.Count;
-            //int curT = 0;
-
-            //foreach (var badSes in _badSessionsId)
-            //{
-            //    var deleteCommand = new SqlCommand(
-            //     "Delete FROM [webdata].[dbo].[serial_events] where session_id = @sid",
-            //    _connection);
-
-            //    deleteCommand.Parameters.Add("@sid", badSes);
-            //    deleteCommand.ExecuteNonQuery();
-
-            //    curT++;
-
-            //    double proc = (double)curT / countT;
-            //}
+            bulkCopy.WriteToServer(sessionsStats);
             
+        }
+
+        public void UpdateTime()
+        {
+            ulong rowPeriod = 1000;
+            List<MouseEvent> sessionMouseEvents = new List<MouseEvent>();
+            Guid prevSesId = Guid.Empty;
+            ulong curRow = 0;
+            var watch = Stopwatch.StartNew();
+            DateTime sessionStarted = DateTime.MinValue;
+
+
+            var commandCount = new SqlCommand(
+                     "SELECT Count(*) FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null",
+                     _connection);
+
+            ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
+
+
+            var serialCommand = new SqlCommand(
+                             "SELECT [event_id] FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null", 
+                            _connection);
+
+            using (SqlDataReader serialEventsReader = serialCommand.ExecuteReader())
+            {
+                while (serialEventsReader.Read())
+                {
+                        int eventIdIndex = serialEventsReader.GetOrdinal("event_id");
+                        Guid eventId = serialEventsReader.GetGuid(eventIdIndex);
+
+                        var sesEventsCommand = new SqlCommand(
+                            "SELECT [page_visit_id] FROM [webdata].[dbo].[session_events] where [event_id] = @event_id",
+                            _connection);
+
+                        sesEventsCommand.Parameters.AddWithValue("@event_id", eventId);
+
+                        object pageVisitIdObj = sesEventsCommand.ExecuteScalar();
+                        if (pageVisitIdObj == null)
+                        {
+                            continue;
+                        }
+
+                        Guid pageVisitId = Guid.Parse(pageVisitIdObj.ToString());
+
+                        var visitsEventsCommand = new SqlCommand(
+                            "SELECT [created] FROM [webdata].[dbo].[page_visits] where [this_page_visit_id] = @page_visit_id",
+                            _connection);
+
+                        visitsEventsCommand.Parameters.AddWithValue("@page_visit_id", pageVisitId);
+
+                        object created = visitsEventsCommand.ExecuteScalar();
+
+                        if (created == null)
+                        {
+                             continue;
+                        }
+
+                        ulong createdStamp = Convert.ToUInt64(created);
+
+                        DateTime createdDate = UnixTimeStampToDateTime(createdStamp);
+
+                        var updateSerialCommand = new SqlCommand(
+                                 "UPDATE [webdata].[dbo].[serial_events] SET [pageSessionOffset] = @created where [event_id] = @event_id",
+                                _connection);
+
+                        updateSerialCommand.Parameters.AddWithValue("@event_id", eventId);
+                        updateSerialCommand.Parameters.AddWithValue("@created", createdDate);
+                        updateSerialCommand.ExecuteNonQuery();
+
+                        curRow++;
+
+                    if (curRow % rowPeriod == 0)
+                    {
+                        double proc = (double)curRow / totalRowsCount;
+                        Console.WriteLine(" {0} % done", (int)(proc * 100));
+                        var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+                    }
+
+                }
+            }
+
+
+            //bulkCopy.WriteToServer(guesturesTable);
+
+        }
+
+        public void CreateGuestures()
+        {
+            ulong rowPeriod = 1000;
+            List<MouseEvent> sessionMouseEvents = new List<MouseEvent>();
+            Guid prevSesId = Guid.Empty;
+            ulong curRow = 0;
+            var watch = Stopwatch.StartNew();
+            DateTime sessionStarted = DateTime.MinValue;
+            BinaryFormatter formatter = new BinaryFormatter();
+
+            DataTable guesturesTable = CreateGuesturesTable();
+            var bulkCopy = new SqlBulkCopy(@"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;", SqlBulkCopyOptions.KeepIdentity) { DestinationTableName = guesturesTable.TableName };
+            bulkCopy.BulkCopyTimeout = 200;
+
+            var commandCount = new SqlCommand(
+                     "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
+                     _connection);
+
+            ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
+
+
+            var serialCommand = new SqlCommand(
+                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where session_id = '1db52ace-207c-43c3-8bb1-0005ec491c57' ",
+                            _connection);
+
+            using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
+            {
+                while (sessionEventsReader.Read())
+                {
+                    int pageVisitIdColumnIndex = sessionEventsReader.GetOrdinal("session_id");
+                    Guid sessionId = sessionEventsReader.GetGuid(pageVisitIdColumnIndex);
+
+                    //if (sessionId == Guid.Parse("ba901ff3-9020-49a8-a3d5-00017867f874"))
+                    //{
+                    //    Debugger.Break(); 5e751bc0-6e30-4ca0-9719-000688be487f 
+                    //}
+
+
+                    int createdColumnIndex = sessionEventsReader.GetOrdinal("created");
+                    DateTime created = sessionEventsReader.GetDateTime(createdColumnIndex);
+
+                    int pageSessionOffsetColumnIndex = sessionEventsReader.GetOrdinal("created");
+                    DateTime pageSessionOffset = sessionEventsReader.GetDateTime(pageSessionOffsetColumnIndex);
+
+                    if (sessionStarted == DateTime.MinValue)
+                    {
+                        sessionStarted = created;
+                    }
+
+                    int eventNameIndex = sessionEventsReader.GetOrdinal("event_name");
+                    string eventName = sessionEventsReader.GetString(eventNameIndex);
+
+                    if (eventName == "session_started" || eventName == "PageClose" || eventName == "orderPurchased")
+                    {
+                        DataRow row = guesturesTable.NewRow();
+                        row["guesture_id"] = Guid.NewGuid();
+                        row["type"] = eventName;
+                        row["session_id"] = sessionId;
+                        row["created"] = created;
+                        row["ended"] = created;
+
+                        guesturesTable.Rows.Add(row);
+                    }
+
+                    int eventIdIndex = sessionEventsReader.GetOrdinal("event_id");
+                    Guid eventId = sessionEventsReader.GetGuid(eventIdIndex);
+
+
+                    if (prevSesId != Guid.Empty && prevSesId != sessionId)
+                    {
+                        if (sessionMouseEvents.Count > 0)
+                        {
+                            List<Gesture> guestures = GuestureCreator.CreateGestures(sessionMouseEvents);
+
+                            foreach (var guesture in guestures)
+                            {
+                                DataRow row = guesturesTable.NewRow();
+                                row["guesture_id"] = Guid.NewGuid();
+                                row["type"] = "Gesture";
+                                row["session_id"] = sessionId;
+                                row["created"] = created;
+                                row["ended"] = guesture.Ended;
+
+                                MemoryStream memStream = new MemoryStream();
+                                foreach (Point point in guesture.Points)
+                                {
+                                    formatter.Serialize(memStream, point);
+                                }
+ 
+                                byte[] data = memStream.ToArray();
+
+                                row["points"] = data;
+
+                                guesturesTable.Rows.Add(row);
+                            }
+                            
+                            sessionMouseEvents = new List<MouseEvent>();
+                            sessionStarted = created;
+                        }
+                    }
+
+                    prevSesId = sessionId;
+
+                    byte[] streamDataChunk;
+                    if (sessionEventsReader["stream_data_chunk"] == DBNull.Value)
+                    {
+                        streamDataChunk = null;
+                    }
+                    else
+                    {
+                        streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];
+                        List<MouseEvent> events = ReadMousePositionEvents(streamDataChunk, sessionId);
+                        events.ForEach(eventX => eventX.EventDateTime = pageSessionOffset + eventX.SessionTimeStamp);
+                        sessionMouseEvents.AddRange(events);
+                    }
+
+                    curRow++;
+
+                    if (curRow % rowPeriod == 0)
+                    {
+                        double proc = (double)curRow / totalRowsCount;
+                        Console.WriteLine(" {0} % done", (int)(proc * 100));
+                        var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+
+                        //bulkCopy.WriteToServer(guesturesTable);
+                        guesturesTable.Rows.Clear();
+                    }
+
+                }
+            }
+
+            List<Gesture> guestures2 = GuestureCreator.CreateGestures(sessionMouseEvents);
+
+            
+
         }
 
     }
