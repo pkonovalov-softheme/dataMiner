@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,11 +12,12 @@ using MathNet.Numerics.Interpolation;
 
 namespace DataConverter
 {
-    class Program
+    internal class Program
     {
-        const string connectionString = @"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;MultipleActiveResultSets=true";
+        private const string connectionString =
+            @"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;MultipleActiveResultSets=true";
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             //var bulkCopy = new SqlBulkCopy(connection) { DestinationTableName = "session_events" };
             //bulkCopy.CommandText =
@@ -42,11 +44,46 @@ namespace DataConverter
 
                     //IInterpolation interp = Interpolate.RationalWithPoles(times, vals);
                     //double res = interp.Interpolate(20952.0);
-                    
 
+                    List<MouseEvent> sessionEvents = GuestureCreator.ResoreEvents();
+
+
+                    double maxSpeed = 0;
+                    double maxSpeedTs = 0;
+
+                    sessionEvents = sessionEvents.OrderBy(sessionEvent => sessionEvent.EventDateTime).ToList();
+
+                    DateTime firstEventDate = sessionEvents.First().EventDateTime;
+                    foreach (MouseEvent me in sessionEvents)
+                    {
+                        me.SessionTimeStamp = me.EventDateTime - firstEventDate;
+                    }
+
+                    GuestureCreator.FixBadEvents(sessionEvents);
+
+                    for (int i = 1; i < sessionEvents.Count; i++)
+                    {
+                        MouseEvent curPoint = sessionEvents[i];
+                        MouseEvent prevPoint = sessionEvents[i - 1];
+
+                        double dist = GuestureCreator.Euclidean(curPoint, prevPoint);
+                        TimeSpan difTime = curPoint.EventDateTime - prevPoint.EventDateTime;
+
+                        double speed = dist/difTime.TotalSeconds;
+                        if (!double.IsInfinity(speed) && speed > maxSpeed)
+                        {
+                            maxSpeed = speed;
+                            maxSpeedTs = difTime.TotalMilliseconds;
+                            if (maxSpeed > 200000)
+                            {
+                                Debugger.Break();
+                            }
+                        }
+                    }
                 }
-            }
 
+            }
         }
     }
 }
+

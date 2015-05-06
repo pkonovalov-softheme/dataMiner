@@ -23,8 +23,13 @@ namespace DataConverter
            MouseOver = 8  
         }
 
+        [Serializable]
         public class MouseEvent
         {
+            private static ulong curId = 0;
+
+            public ulong id;
+
             public MouseEvent PrevGood;
 
             /// <summary>
@@ -35,7 +40,7 @@ namespace DataConverter
             /// <summary>
             /// Session start relative timestamp
             /// </summary>
-            public TimeSpan SessionTimeStamp { get; private set; }
+            public TimeSpan SessionTimeStamp { get; set; }
 
 
             /// <summary>
@@ -94,6 +99,8 @@ namespace DataConverter
 
            public static MouseEvent ReadMouseEvent(BinaryReader reader)
            {
+
+
                var mevent = new MouseEvent();
                mevent.EventType = (MouseEventTypes)reader.ReadByte();
                mevent.SessionTimeStamp = TimeSpan.FromMilliseconds(reader.ReadInt32());
@@ -102,8 +109,11 @@ namespace DataConverter
                mevent.Width = reader.ReadInt16();
                mevent.Height = reader.ReadInt16();
                mevent.UrlLength = reader.ReadInt16();
-
                mevent.Url = Encoding.UTF8.GetString(reader.ReadBytes(mevent.UrlLength));
+
+               curId++;
+               mevent.id = curId;
+
                return mevent;
            }
 

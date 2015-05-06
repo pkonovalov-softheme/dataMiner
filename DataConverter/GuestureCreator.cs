@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading.Tasks;
 using MathNet.Numerics;
@@ -33,7 +34,7 @@ namespace DataConverter
                 MouseEvent prevPoint = sessionEvents[i - 1];
 
                 double dist = Euclidean(curPoint, prevPoint);
-                TimeSpan difTime = curPoint.SessionTimeStamp - prevPoint.SessionTimeStamp;
+                TimeSpan difTime = curPoint.EventDateTime - prevPoint.EventDateTime;
 
                 double speed = dist / difTime.TotalSeconds;
                 if (!double.IsInfinity(speed) && speed > maxSpeed)
@@ -77,7 +78,29 @@ namespace DataConverter
             return result;
         }
 
-        private static void FixBadEvents(List<MouseEvent> sessionEvents)
+        private static void SaveEvents(List<MouseEvent> sessionEvents, int from, int to)
+        {
+            var formatter = new BinaryFormatter();
+            List<MouseEvent> targetList = sessionEvents.GetRange(from, to - from);
+
+
+            using (FileStream fs = new FileStream(@"C:\temp\1.txt", FileMode.Create))
+            {
+                formatter.Serialize(fs, targetList);
+            }
+        }
+
+        public static List<MouseEvent> ResoreEvents()
+        {
+            var formatter = new BinaryFormatter();
+
+            using (FileStream fs = new FileStream(@"C:\temp\1.txt", FileMode.Open))
+            {
+                return (List<MouseEvent>)formatter.Deserialize(fs);
+            }
+        }
+
+        public static void FixBadEvents(List<MouseEvent> sessionEvents)
         {
             List<double> goodEventsX = new List<double>(sessionEvents.Count);
             List<double> goodEventsY= new List<double>(sessionEvents.Count);
@@ -142,8 +165,8 @@ namespace DataConverter
 
             if (goodTimes.Count > 5)
             {
-                interpX = Interpolate.CubicSplineRobust(goodTimes, goodEventsX);
-                interpY = Interpolate.CubicSplineRobust(goodTimes, goodEventsY);
+                interpX = Interpolate.Linear(goodTimes, goodEventsX);
+                interpY = Interpolate.Linear(goodTimes, goodEventsY);
             }
             else if (goodTimes.Count > 2)
             {
@@ -164,6 +187,10 @@ namespace DataConverter
             for (int i = 0; i < badEvents.Count; i++)
             {
                 var badEvent = badEvents[i];
+
+                //if (badEvent.id == 6843 || badEvent.id == 6844 || badEvent.id == 7305)
+                //    Debugger.Break();
+
                 double sesSpan = (badEvent.EventDateTime - firstDate).TotalMilliseconds;
 
                 double intX = interpX.Interpolate(sesSpan);
