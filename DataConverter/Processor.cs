@@ -12,10 +12,10 @@ using System.Runtime.Serialization.Formatters.Binary;
 
 namespace DataConverter
 {
-    class DbProcessor
+    internal class DbProcessor
     {
         private readonly SqlConnection _connection;
-        private readonly HashSet<Guid> _badSessionsId = new HashSet<Guid>(); 
+        private readonly HashSet<Guid> _badSessionsId = new HashSet<Guid>();
 
         public DbProcessor(SqlConnection connection)
         {
@@ -26,22 +26,22 @@ namespace DataConverter
         {
             var orderTable = new DataTable("guestures");
 
-            var colId = new DataColumn("guesture_id", typeof(Guid));
+            var colId = new DataColumn("guesture_id", typeof (Guid));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("type", typeof(string));
+            colId = new DataColumn("type", typeof (string));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("session_id", typeof(Guid));
+            colId = new DataColumn("session_id", typeof (Guid));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("created", typeof(DateTime));
+            colId = new DataColumn("created", typeof (DateTime));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("ended", typeof(DateTime));
+            colId = new DataColumn("ended", typeof (DateTime));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("points", typeof(byte[]));
+            colId = new DataColumn("points", typeof (byte[]));
             orderTable.Columns.Add(colId);
 
             return orderTable;
@@ -51,16 +51,16 @@ namespace DataConverter
         {
             var orderTable = new DataTable("sessions_stats");
 
-            var colId = new DataColumn("session_id", typeof(Guid));
+            var colId = new DataColumn("session_id", typeof (Guid));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("CorrectEventsCount", typeof(Int32));
+            colId = new DataColumn("CorrectEventsCount", typeof (Int32));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("InvalidEventsCount", typeof(Int32));
+            colId = new DataColumn("InvalidEventsCount", typeof (Int32));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("Rate", typeof(double));
+            colId = new DataColumn("Rate", typeof (double));
             orderTable.Columns.Add(colId);
 
             return orderTable;
@@ -70,25 +70,25 @@ namespace DataConverter
         {
             var orderTable = new DataTable("serial_events2");
 
-            var colId = new DataColumn("session_id", typeof(Guid));
+            var colId = new DataColumn("session_id", typeof (Guid));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("created", typeof(DateTime));
+            colId = new DataColumn("created", typeof (DateTime));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("site_id", typeof(Int32));
+            colId = new DataColumn("site_id", typeof (Int32));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("event_name", typeof(String));
+            colId = new DataColumn("event_name", typeof (String));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("page_url", typeof(String));
+            colId = new DataColumn("page_url", typeof (String));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("stream_data_chunk", typeof(byte[]));
+            colId = new DataColumn("stream_data_chunk", typeof (byte[]));
             orderTable.Columns.Add(colId);
 
-            colId = new DataColumn("event_id", typeof(Guid));
+            colId = new DataColumn("event_id", typeof (Guid));
             orderTable.Columns.Add(colId);
 
             return orderTable;
@@ -116,14 +116,17 @@ namespace DataConverter
 
             DataTable serialEvents = CreateSerialEventsTable();
 
-            var bulkCopy = new SqlBulkCopy(@"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;", SqlBulkCopyOptions.KeepIdentity) { DestinationTableName = serialEvents.TableName };
+            var bulkCopy =
+                new SqlBulkCopy(
+                    @"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;",
+                    SqlBulkCopyOptions.KeepIdentity) {DestinationTableName = serialEvents.TableName};
             bulkCopy.BatchSize = 50;
 
             var command = new SqlCommand(
-                     "SELECT [created], [event_name], [page_url],[page_visit_id], [session_id], [site_id], [stream_data_chunk], [event_id]" +
-                     "FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
-                     " or [event_name] = 'PageClose' order by [session_id], [created] ",
-                     _connection);
+                "SELECT [created], [event_name], [page_url],[page_visit_id], [session_id], [site_id], [stream_data_chunk], [event_id]" +
+                "FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
+                " or [event_name] = 'PageClose' order by [session_id], [created] ",
+                _connection);
 
             using (SqlDataReader sessionEventsReader = command.ExecuteReader())
             {
@@ -158,7 +161,8 @@ namespace DataConverter
                     }
                     else
                     {
-                        streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];//sessionEventsReader.GetBytes(streamDataChunkIndex, buffer, 1, buffer.Length,);
+                        streamDataChunk = (byte[]) sessionEventsReader["stream_data_chunk"];
+                            //sessionEventsReader.GetBytes(streamDataChunkIndex, buffer, 1, buffer.Length,);
                     }
 
                     //if (currentSessionId != sessionId)
@@ -183,7 +187,7 @@ namespace DataConverter
                     //}
 
                     workRow["session_id"] = sessionId;
-                    workRow["created"] = UnixTimeStampToDateTime((ulong)created);
+                    workRow["created"] = UnixTimeStampToDateTime((ulong) created);
                     workRow["page_url"] = pageUrl;
                     workRow["site_id"] = siteId;
                     workRow["event_name"] = eventName;
@@ -206,10 +210,11 @@ namespace DataConverter
                     {
                         bulkCopy.WriteToServer(serialEvents);
                         curRecordInBulk = 0;
-                        double proc = (double)curRow / totalRowsCount;
-                        Console.WriteLine(" {0} % done", (int)(proc * 100));
-                        var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
-                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+                        double proc = (double) curRow/totalRowsCount;
+                        Console.WriteLine(" {0} % done", (int) (proc*100));
+                        var remainingMsecs = (ulong) (watch.ElapsedMilliseconds/proc);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes,
+                            TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
                     }
                 }
             }
@@ -224,9 +229,9 @@ namespace DataConverter
             ulong curRow = 0;
 
             var commandCount = new SqlCommand(
-                     "SELECT Count(*) FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
-                     " or [event_name] = 'PageClose'",
-                     _connection);
+                "SELECT Count(*) FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
+                " or [event_name] = 'PageClose'",
+                _connection);
 
             ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
 
@@ -237,10 +242,10 @@ namespace DataConverter
             Guid currentSessionId = Guid.Empty;
 
             var command = new SqlCommand(
-                     "SELECT [created], [event_name], [page_url],[page_visit_id], [session_id], [site_id], [stream_data_chunk], [event_id]" +
-                     "FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
-                     " or [event_name] = 'PageClose' order by [session_id], [created] ",
-                     _connection);
+                "SELECT [created], [event_name], [page_url],[page_visit_id], [session_id], [site_id], [stream_data_chunk], [event_id]" +
+                "FROM [webdata].[dbo].[session_events] where [event_name] = 'MouseEvents' or [event_name] = 'OrderPurchased'" +
+                " or [event_name] = 'PageClose' order by [session_id], [created] ",
+                _connection);
 
             using (SqlDataReader sessionEventsReader = command.ExecuteReader())
             {
@@ -264,7 +269,7 @@ namespace DataConverter
                     int eventNameIndex = sessionEventsReader.GetOrdinal("event_name");
                     string eventName = sessionEventsReader.GetString(eventNameIndex);
 
-                   // int streamDataChunkIndex = sessionEventsReader.GetOrdinal("event_name");
+                    // int streamDataChunkIndex = sessionEventsReader.GetOrdinal("event_name");
 
                     if (sessionEventsReader["stream_data_chunk"] == DBNull.Value)
                     {
@@ -272,22 +277,24 @@ namespace DataConverter
                     }
                     else
                     {
-                        streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];//sessionEventsReader.GetBytes(streamDataChunkIndex, buffer, 1, buffer.Length,);
+                        streamDataChunk = (byte[]) sessionEventsReader["stream_data_chunk"];
+                            //sessionEventsReader.GetBytes(streamDataChunkIndex, buffer, 1, buffer.Length,);
                     }
-          
+
                     if (currentSessionId != sessionId)
                     {
                         Tuple<DateTime, string> sesStart = GetPageSessionStart(sessionId, created);
 
                         if (sesStart == null)
                         {
-                            sesStart = new Tuple<DateTime, string>(UnixTimeStampToDateTime((ulong)created), pageUrl);
+                            sesStart = new Tuple<DateTime, string>(UnixTimeStampToDateTime((ulong) created), pageUrl);
                         }
 
-                        Debug.Assert(sesStart.Item1 <= UnixTimeStampToDateTime((ulong)created));
+                        Debug.Assert(sesStart.Item1 <= UnixTimeStampToDateTime((ulong) created));
                         insertCommand = new SqlCommand(
                             "INSERT INTO [webdata].[dbo].[serial_events2] ([key], [session_id], [created], [site_id], [event_name], [page_url], [event_id]) " +
-                            "VALUES(@key, @session_id, @created, @site_id, @event_name, @page_url, @event_id)", _connection);
+                            "VALUES(@key, @session_id, @created, @site_id, @event_name, @page_url, @event_id)",
+                            _connection);
 
                         insertCommand.Parameters.Add("@key", SqlDbType.BigInt).Value = curRow;
                         insertCommand.Parameters.Add("@session_id", SqlDbType.UniqueIdentifier).Value = sessionId;
@@ -306,11 +313,13 @@ namespace DataConverter
 
                     insertCommand = new SqlCommand(
                         "INSERT INTO [webdata].[dbo].[serial_events2] ([key], [session_id], [created], [site_id], [event_name], [page_url], [stream_data_chunk], [event_id]) " +
-                        "VALUES(@key, @session_id, @created, @site_id, @event_name, @page_url, @stream_data_chunk, @event_id)", _connection);
+                        "VALUES(@key, @session_id, @created, @site_id, @event_name, @page_url, @stream_data_chunk, @event_id)",
+                        _connection);
 
                     insertCommand.Parameters.Add("@key", SqlDbType.BigInt).Value = curRow;
                     insertCommand.Parameters.Add("@session_id", SqlDbType.UniqueIdentifier).Value = sessionId;
-                    insertCommand.Parameters.Add("@created", SqlDbType.DateTime).Value = UnixTimeStampToDateTime((ulong)created);
+                    insertCommand.Parameters.Add("@created", SqlDbType.DateTime).Value =
+                        UnixTimeStampToDateTime((ulong) created);
                     insertCommand.Parameters.Add("@site_id", SqlDbType.Int).Value = siteId;
                     insertCommand.Parameters.Add("@page_url", SqlDbType.VarChar).Value = pageUrl;
 
@@ -322,7 +331,7 @@ namespace DataConverter
                     {
                         insertCommand.Parameters.Add("@stream_data_chunk", SqlDbType.VarBinary).Value = streamDataChunk;
                     }
- 
+
                     insertCommand.Parameters.Add("@event_name", SqlDbType.VarChar).Value = eventName;
                     insertCommand.Parameters.Add("@event_id", SqlDbType.UniqueIdentifier).Value = eventId;
 
@@ -351,7 +360,7 @@ namespace DataConverter
             var dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
             dtDateTime = dtDateTime.AddMilliseconds(unixTimeStamp).ToLocalTime();
 
-            Debug.Assert(dtDateTime >  new DateTime(1990, 1, 1));
+            Debug.Assert(dtDateTime > new DateTime(1990, 1, 1));
             Debug.Assert(dtDateTime < new DateTime(2030, 1, 1));
 
             return dtDateTime;
@@ -396,7 +405,7 @@ namespace DataConverter
                     currentEvent.EventType == MouseEventTypes.Scroll)
                 {
                     result.Add(currentEvent);
-                    //if (currentEvent.SessionTimeStamp.TotalMilliseconds == 1480.0)
+                    //if (currentEvent.T.TotalMilliseconds == 1480.0)
                     //{
                     //    Debugger.Break();
                     //}
@@ -416,21 +425,24 @@ namespace DataConverter
             var watch = Stopwatch.StartNew();
 
             DataTable sessionsStats = CreateSesionStatsTable();
-            var bulkCopy = new SqlBulkCopy(@"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;", SqlBulkCopyOptions.KeepIdentity) { DestinationTableName = sessionsStats.TableName };
+            var bulkCopy =
+                new SqlBulkCopy(
+                    @"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;",
+                    SqlBulkCopyOptions.KeepIdentity) {DestinationTableName = sessionsStats.TableName};
 
 
             var commandCount = new SqlCommand(
-                     "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
-                     _connection);
+                "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
+                _connection);
 
             ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
 
 
             var serialCommand = new SqlCommand(
-                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where session_id = '58e2d4b9-81ab-4918-b0f1-0010a7596f26'",
-                            _connection);
+                "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where session_id = '58e2d4b9-81ab-4918-b0f1-0010a7596f26'",
+                _connection);
 
-             using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
+            using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
             {
                 while (sessionEventsReader.Read())
                 {
@@ -451,7 +463,7 @@ namespace DataConverter
                     {
 
                         int validMouseEventsCount = sessionMouseEvents.Count(curEvent => curEvent.IsValid);
-                        double validRate = (double)validMouseEventsCount / sessionMouseEvents.Count;
+                        double validRate = (double) validMouseEventsCount/sessionMouseEvents.Count;
 
                         DataRow curStatRow = sessionsStats.NewRow();
                         curStatRow["session_id"] = prevSesId;
@@ -480,7 +492,7 @@ namespace DataConverter
                     }
                     else
                     {
-                        streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];
+                        streamDataChunk = (byte[]) sessionEventsReader["stream_data_chunk"];
                         List<MouseEvent> events = ReadMousePositionEvents(streamDataChunk, sessionId);
                         sessionMouseEvents.AddRange(events);
                     }
@@ -492,14 +504,15 @@ namespace DataConverter
                         double proc = (double) curRow/totalRowsCount;
                         Console.WriteLine(" {0} % done", (int) (proc*100));
                         var remainingMsecs = (ulong) (watch.ElapsedMilliseconds/proc);
-                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes,
+                            TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
                     }
-                    
+
                 }
             }
 
             bulkCopy.WriteToServer(sessionsStats);
-            
+
         }
 
         public void UpdateTime()
@@ -513,70 +526,71 @@ namespace DataConverter
 
 
             var commandCount = new SqlCommand(
-                     "SELECT Count(*) FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null",
-                     _connection);
+                "SELECT Count(*) FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null",
+                _connection);
 
             ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
 
 
             var serialCommand = new SqlCommand(
-                             "SELECT [event_id] FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null", 
-                            _connection);
+                "SELECT [event_id] FROM [webdata].[dbo].[serial_events] where [event_name] != 'session_started' and event_name != 'PageClose' and [pageSessionOffset] is null",
+                _connection);
 
             using (SqlDataReader serialEventsReader = serialCommand.ExecuteReader())
             {
                 while (serialEventsReader.Read())
                 {
-                        int eventIdIndex = serialEventsReader.GetOrdinal("event_id");
-                        Guid eventId = serialEventsReader.GetGuid(eventIdIndex);
+                    int eventIdIndex = serialEventsReader.GetOrdinal("event_id");
+                    Guid eventId = serialEventsReader.GetGuid(eventIdIndex);
 
-                        var sesEventsCommand = new SqlCommand(
-                            "SELECT [page_visit_id] FROM [webdata].[dbo].[session_events] where [event_id] = @event_id",
-                            _connection);
+                    var sesEventsCommand = new SqlCommand(
+                        "SELECT [page_visit_id] FROM [webdata].[dbo].[session_events] where [event_id] = @event_id",
+                        _connection);
 
-                        sesEventsCommand.Parameters.AddWithValue("@event_id", eventId);
+                    sesEventsCommand.Parameters.AddWithValue("@event_id", eventId);
 
-                        object pageVisitIdObj = sesEventsCommand.ExecuteScalar();
-                        if (pageVisitIdObj == null)
-                        {
-                            continue;
-                        }
-
-                        Guid pageVisitId = Guid.Parse(pageVisitIdObj.ToString());
-
-                        var visitsEventsCommand = new SqlCommand(
-                            "SELECT [created] FROM [webdata].[dbo].[page_visits] where [this_page_visit_id] = @page_visit_id",
-                            _connection);
-
-                        visitsEventsCommand.Parameters.AddWithValue("@page_visit_id", pageVisitId);
-
-                        object created = visitsEventsCommand.ExecuteScalar();
-
-                        if (created == null)
-                        {
-                             continue;
-                        }
-
-                        ulong createdStamp = Convert.ToUInt64(created);
-
-                        DateTime createdDate = UnixTimeStampToDateTime(createdStamp);
-
-                        var updateSerialCommand = new SqlCommand(
-                                 "UPDATE [webdata].[dbo].[serial_events] SET [pageSessionOffset] = @created where [event_id] = @event_id",
-                                _connection);
-
-                        updateSerialCommand.Parameters.AddWithValue("@event_id", eventId);
-                        updateSerialCommand.Parameters.AddWithValue("@created", createdDate);
-                        updateSerialCommand.ExecuteNonQuery();
-
-                        curRow++;
-
-                    if (curRow % rowPeriod == 0)
+                    object pageVisitIdObj = sesEventsCommand.ExecuteScalar();
+                    if (pageVisitIdObj == null)
                     {
-                        double proc = (double)curRow / totalRowsCount;
-                        Console.WriteLine(" {0} % done", (int)(proc * 100));
-                        var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
-                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+                        continue;
+                    }
+
+                    Guid pageVisitId = Guid.Parse(pageVisitIdObj.ToString());
+
+                    var visitsEventsCommand = new SqlCommand(
+                        "SELECT [created] FROM [webdata].[dbo].[page_visits] where [this_page_visit_id] = @page_visit_id",
+                        _connection);
+
+                    visitsEventsCommand.Parameters.AddWithValue("@page_visit_id", pageVisitId);
+
+                    object created = visitsEventsCommand.ExecuteScalar();
+
+                    if (created == null)
+                    {
+                        continue;
+                    }
+
+                    ulong createdStamp = Convert.ToUInt64(created);
+
+                    DateTime createdDate = UnixTimeStampToDateTime(createdStamp);
+
+                    var updateSerialCommand = new SqlCommand(
+                        "UPDATE [webdata].[dbo].[serial_events] SET [pageSessionOffset] = @created where [event_id] = @event_id",
+                        _connection);
+
+                    updateSerialCommand.Parameters.AddWithValue("@event_id", eventId);
+                    updateSerialCommand.Parameters.AddWithValue("@created", createdDate);
+                    updateSerialCommand.ExecuteNonQuery();
+
+                    curRow++;
+
+                    if (curRow%rowPeriod == 0)
+                    {
+                        double proc = (double) curRow/totalRowsCount;
+                        Console.WriteLine(" {0} % done", (int) (proc*100));
+                        var remainingMsecs = (ulong) (watch.ElapsedMilliseconds/proc);
+                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes,
+                            TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
                     }
 
                 }
@@ -590,27 +604,30 @@ namespace DataConverter
         public void CreateGuestures()
         {
             ulong rowPeriod = 1000;
-            List<MouseEvent> sessionMouseEvents = new List<MouseEvent>();
             Guid prevSesId = Guid.Empty;
             ulong curRow = 0;
             var watch = Stopwatch.StartNew();
             DateTime sessionStarted = DateTime.MinValue;
             BinaryFormatter formatter = new BinaryFormatter();
 
-            DataTable guesturesTable = CreateGuesturesTable();
-            var bulkCopy = new SqlBulkCopy(@"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;", SqlBulkCopyOptions.KeepIdentity) { DestinationTableName = guesturesTable.TableName };
+            DataTable gesturesTable = CreateGuesturesTable();
+            var bulkCopy =
+                new SqlBulkCopy(
+                    @"Server = 127.0.0.1; Database = webData;persist security info=True; Integrated Security=SSPI;;",
+                    SqlBulkCopyOptions.KeepIdentity) {DestinationTableName = gesturesTable.TableName};
             bulkCopy.BulkCopyTimeout = 200;
 
             var commandCount = new SqlCommand(
-                     "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
-                     _connection);
+                "SELECT Count(*) FROM [webdata].[dbo].[serial_events]",
+                _connection);
 
             ulong totalRowsCount = Convert.ToUInt64(commandCount.ExecuteScalar());
 
 
             var serialCommand = new SqlCommand(
-                             "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM [webdata].[dbo].[serial_events] where session_id = '1db52ace-207c-43c3-8bb1-0005ec491c57' ",
-                            _connection);
+                "SELECT [event_id], [session_id], [created], [event_name], [stream_data_chunk] FROM " +
+                "[webdata].[dbo].[serial_events]",
+                _connection);
 
             using (SqlDataReader sessionEventsReader = serialCommand.ExecuteReader())
             {
@@ -641,29 +658,32 @@ namespace DataConverter
 
                     if (eventName == "session_started" || eventName == "PageClose" || eventName == "orderPurchased")
                     {
-                        DataRow row = guesturesTable.NewRow();
+                        DataRow row = gesturesTable.NewRow();
                         row["guesture_id"] = Guid.NewGuid();
                         row["type"] = eventName;
                         row["session_id"] = sessionId;
                         row["created"] = created;
                         row["ended"] = created;
 
-                        guesturesTable.Rows.Add(row);
+                        gesturesTable.Rows.Add(row);
                     }
 
                     int eventIdIndex = sessionEventsReader.GetOrdinal("event_id");
                     Guid eventId = sessionEventsReader.GetGuid(eventIdIndex);
 
 
-                    if (prevSesId != Guid.Empty && prevSesId != sessionId)
+                    if (sessionEventsReader["stream_data_chunk"] != DBNull.Value)
                     {
-                        if (sessionMouseEvents.Count > 0)
-                        {
-                            List<Gesture> guestures = GuestureCreator.CreateGestures(sessionMouseEvents);
+                        byte[] streamDataChunk = (byte[]) sessionEventsReader["stream_data_chunk"];
+                        List<MouseEvent> events = ReadMousePositionEvents(streamDataChunk, sessionId);
 
-                            foreach (var guesture in guestures)
+                        if (events.Count > 0)
+                        {
+                            List<Gesture> gestures = GuestureCreator.CreateGestures(events, created);
+
+                            foreach (var guesture in gestures)
                             {
-                                DataRow row = guesturesTable.NewRow();
+                                DataRow row = gesturesTable.NewRow();
                                 row["guesture_id"] = Guid.NewGuid();
                                 row["type"] = "Gesture";
                                 row["session_id"] = sessionId;
@@ -675,55 +695,37 @@ namespace DataConverter
                                 {
                                     formatter.Serialize(memStream, point);
                                 }
- 
+
                                 byte[] data = memStream.ToArray();
 
                                 row["points"] = data;
 
-                                guesturesTable.Rows.Add(row);
+                                gesturesTable.Rows.Add(row);
                             }
-                            
-                            sessionMouseEvents = new List<MouseEvent>();
-                            sessionStarted = created;
                         }
+
+                        curRow++;
+
+                        if (curRow%rowPeriod == 0)
+                        {
+                            double proc = (double) curRow/totalRowsCount;
+                            Console.WriteLine(" {0} % done", (int) (proc*100));
+                            var remainingMsecs = (ulong) (watch.ElapsedMilliseconds/proc);
+                            Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes,
+                                TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
+
+                            //bulkCopy.WriteToServer(guesturesTable);
+                            gesturesTable.Rows.Clear();
+                        }
+
                     }
-
-                    prevSesId = sessionId;
-
-                    byte[] streamDataChunk;
-                    if (sessionEventsReader["stream_data_chunk"] == DBNull.Value)
-                    {
-                        streamDataChunk = null;
-                    }
-                    else
-                    {
-                        streamDataChunk = (byte[])sessionEventsReader["stream_data_chunk"];
-                        List<MouseEvent> events = ReadMousePositionEvents(streamDataChunk, sessionId);
-                        events.ForEach(eventX => eventX.EventDateTime = pageSessionOffset + eventX.SessionTimeStamp);
-                        sessionMouseEvents.AddRange(events);
-                    }
-
-                    curRow++;
-
-                    if (curRow % rowPeriod == 0)
-                    {
-                        double proc = (double)curRow / totalRowsCount;
-                        Console.WriteLine(" {0} % done", (int)(proc * 100));
-                        var remainingMsecs = (ulong)(watch.ElapsedMilliseconds / proc);
-                        Console.WriteLine(" Time in way minutes: {0}, left minutes: {1} ", watch.Elapsed.Minutes, TimeSpan.FromMilliseconds(remainingMsecs).Minutes);
-
-                        //bulkCopy.WriteToServer(guesturesTable);
-                        guesturesTable.Rows.Clear();
-                    }
-
                 }
+
+                //List<Gesture> guestures2 = GuestureCreator.CreateGestures(sessionMouseEvents);
+
+
             }
 
-            List<Gesture> guestures2 = GuestureCreator.CreateGestures(sessionMouseEvents);
-
-            
-
         }
-
     }
 }

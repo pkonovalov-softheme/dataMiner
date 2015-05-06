@@ -40,14 +40,7 @@ namespace DataConverter
             /// <summary>
             /// Session start relative timestamp
             /// </summary>
-            public TimeSpan SessionTimeStamp { get; set; }
-
-
-            /// <summary>
-            /// Event absolute DateTime
-            /// </summary>
-            public DateTime EventDateTime { get; set; }
-
+            public TimeSpan T { get; set; }
 
             /// <summary>
             /// X document coordinat system, pixel
@@ -99,11 +92,9 @@ namespace DataConverter
 
            public static MouseEvent ReadMouseEvent(BinaryReader reader)
            {
-
-
                var mevent = new MouseEvent();
                mevent.EventType = (MouseEventTypes)reader.ReadByte();
-               mevent.SessionTimeStamp = TimeSpan.FromMilliseconds(reader.ReadInt32());
+               mevent.T = TimeSpan.FromMilliseconds(reader.ReadInt32());
                mevent.X = reader.ReadInt16();
                mevent.Y = reader.ReadInt16();
                mevent.Width = reader.ReadInt16();
@@ -119,7 +110,7 @@ namespace DataConverter
 
             public override string ToString()
             {
-                return string.Format("X:{0} Y:{1} T:{2}", X, Y, SessionTimeStamp.TotalMilliseconds);
+                return string.Format("X:{0} Y:{1} T:{2}", X, Y, T.TotalMilliseconds);
             }
         }
 }

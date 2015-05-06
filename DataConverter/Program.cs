@@ -19,11 +19,7 @@ namespace DataConverter
 
         private static void Main(string[] args)
         {
-            //var bulkCopy = new SqlBulkCopy(connection) { DestinationTableName = "session_events" };
-            //bulkCopy.CommandText =
-            //    "DELETE FROM dbo.BulkCopyDemoMatchingColumns";
-            //bulkCopy.ExecuteNonQuery();
-
+          
             using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
@@ -32,7 +28,7 @@ namespace DataConverter
                 {
                     var proc = new DbProcessor(connection);
                     proc.CreateGuestures();
-
+#region oldCode
                     //MouseEvent p2 = new MouseEvent();
 
                     //double[] _x = { 1, 5, 9 };
@@ -45,41 +41,42 @@ namespace DataConverter
                     //IInterpolation interp = Interpolate.RationalWithPoles(times, vals);
                     //double res = interp.Interpolate(20952.0);
 
-                    List<MouseEvent> sessionEvents = GuestureCreator.ResoreEvents();
+                    //List<MouseEvent> sessionEvents = GuestureCreator.ResoreEvents();
 
 
-                    double maxSpeed = 0;
-                    double maxSpeedTs = 0;
+                    //double maxSpeed = 0;
+                    //double maxSpeedTs = 0;
 
-                    sessionEvents = sessionEvents.OrderBy(sessionEvent => sessionEvent.EventDateTime).ToList();
+                    //sessionEvents = sessionEvents.OrderBy(sessionEvent => sessionEvent.EventDateTime).ToList();
 
-                    DateTime firstEventDate = sessionEvents.First().EventDateTime;
-                    foreach (MouseEvent me in sessionEvents)
-                    {
-                        me.SessionTimeStamp = me.EventDateTime - firstEventDate;
-                    }
+                    //DateTime firstEventDate = sessionEvents.First().EventDateTime;
+                    //foreach (MouseEvent me in sessionEvents)
+                    //{
+                    //    me.T = me.EventDateTime - firstEventDate;
+                    //}
 
-                    GuestureCreator.FixBadEvents(sessionEvents);
+                    //GuestureCreator.FixBadEvents(sessionEvents);
 
-                    for (int i = 1; i < sessionEvents.Count; i++)
-                    {
-                        MouseEvent curPoint = sessionEvents[i];
-                        MouseEvent prevPoint = sessionEvents[i - 1];
+                    //for (int i = 1; i < sessionEvents.Count; i++)
+                    //{
+                    //    MouseEvent curPoint = sessionEvents[i];
+                    //    MouseEvent prevPoint = sessionEvents[i - 1];
 
-                        double dist = GuestureCreator.Euclidean(curPoint, prevPoint);
-                        TimeSpan difTime = curPoint.EventDateTime - prevPoint.EventDateTime;
+                    //    double dist = GuestureCreator.Euclidean(curPoint, prevPoint);
+                    //    TimeSpan difTime = curPoint.T - prevPoint.T;
 
-                        double speed = dist/difTime.TotalSeconds;
-                        if (!double.IsInfinity(speed) && speed > maxSpeed)
-                        {
-                            maxSpeed = speed;
-                            maxSpeedTs = difTime.TotalMilliseconds;
-                            if (maxSpeed > 200000)
-                            {
-                                Debugger.Break();
-                            }
-                        }
-                    }
+                    //    double speed = dist/difTime.TotalSeconds;
+                    //    if (!double.IsInfinity(speed) && speed > maxSpeed)
+                    //    {
+                    //        maxSpeed = speed;
+                    //        maxSpeedTs = difTime.TotalMilliseconds;
+                    //        if (maxSpeed > 200000)
+                    //        {
+                    //            Debugger.Break();
+                    //        }
+                    //    }
+#endregion
+                    
                 }
 
             }

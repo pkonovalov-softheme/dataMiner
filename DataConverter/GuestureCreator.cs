@@ -18,23 +18,23 @@ namespace DataConverter
         private static double maxSpeed = 0;
         private static double maxSpeedTs = 0;
 
-        public static List<Gesture> CreateGestures(List<MouseEvent> sessionEvents)
+        public static List<Gesture> CreateGestures(List<MouseEvent> chunkEvents, DateTime created)
         {
             var result = new List<Gesture>();
 
             var gesture = new Gesture();
 
-            sessionEvents = sessionEvents.OrderBy(sessionEvent => sessionEvent.EventDateTime).ToList();
+           // chunkEvents = chunkEvents.OrderBy(sessionEvent => sessionEvent.EventDateTime).ToList();
 
-            FixBadEvents(sessionEvents);
+            FixBadEvents(chunkEvents);
 
-            for (int i = 1; i < sessionEvents.Count; i++)
+            for (int i = 1; i < chunkEvents.Count; i++)
             {
-                MouseEvent curPoint = sessionEvents[i];
-                MouseEvent prevPoint = sessionEvents[i - 1];
+                MouseEvent curPoint = chunkEvents[i];
+                MouseEvent prevPoint = chunkEvents[i - 1];
 
                 double dist = Euclidean(curPoint, prevPoint);
-                TimeSpan difTime = curPoint.EventDateTime - prevPoint.EventDateTime;
+                TimeSpan difTime = curPoint.T - prevPoint.T;
 
                 double speed = dist / difTime.TotalSeconds;
                 if (!double.IsInfinity(speed) && speed > maxSpeed)
@@ -43,7 +43,7 @@ namespace DataConverter
                     maxSpeedTs = difTime.TotalMilliseconds;
                     if (maxSpeed > 200000)
                     {
-                        Debugger.Break();
+                       // Debugger.Break();
                     }
                 }
 
@@ -58,11 +58,11 @@ namespace DataConverter
                 }
                 else
                 {
-                    Point point = new Point(curPoint.X, curPoint.Y, curPoint.SessionTimeStamp);
+                    Point point = new Point(curPoint.X, curPoint.Y, curPoint.T);
 
                     if (gesture.Points.Count == 0)
                     {
-                        gesture.Created = curPoint.EventDateTime;
+                        gesture.Created = created + point.T;
                     }
 
                     gesture.Points.Add(point);
@@ -110,32 +110,46 @@ namespace DataConverter
             List<double> goodTimes = new List<double>(sessionEvents.Count);
             MouseEvent last = null;
             MouseEvent prevEvent = null;
-            DateTime firstDate;
+            //DateTime firstDate;
 
-            //if (sessionEvents.Count == 0)
-            //{
-            //    return;
-            //}
-
-            firstDate = sessionEvents.First().EventDateTime;
+           // MouseEvent prevM = null;
+            //firstDate = sessionEvents.First().EventDateTime;
 
             for (int i = 0; i < sessionEvents.Count; i++)
             {
                 var sessionEvent = sessionEvents[i];
-                if (sessionEvent.EventDateTime < firstDate)
-                {
-                    Debugger.Break();
-                }
+                //if (sessionEvent.EventType == MouseEventTypes.Scroll)
+                //{
+                //    if (!sessionEvent.IsValid)
+                //        Debugger.Break();
+                //}
 
-                double sesSpan = (sessionEvent.EventDateTime - firstDate).TotalMilliseconds;
+                //if (i > 0 && sessionEvent.EventType == MouseEventTypes.Mousemove && sessionEvents[i - 1].EventType == MouseEventTypes.Scroll)
+                //{
+                //    Debugger.Break();
+                //}
+
+                if (sessionEvent.EventType != MouseEventTypes.Scroll)
+                {
+                    //if (!sessionEvent.IsValid)
+                    //    Debugger.Break();
+                    //MouseEvent good =
+                    //    sessionEvents.GetRange(i, sessionEvents.Count - i)
+                    //        .FirstOrDefault(ses => ses.EventType == MouseEventTypes.Mousemove);
+
+                    //for (int k = i; k < sessionEvents.Count; k++)
+                    //{
+
+                    //}
+                }
 
                 if (sessionEvent.IsValid)
                 {
-                    if (!goodTimes.Contains(sesSpan))
+                    if (!goodTimes.Contains(sessionEvent.T.TotalMilliseconds))
                     {
                         goodEventsX.Add(sessionEvent.X);
                         goodEventsY.Add(sessionEvent.Y);
-                        goodTimes.Add(sesSpan);
+                        goodTimes.Add(sessionEvent.T.TotalMilliseconds);
                         last = sessionEvent;
                     }
                     else
@@ -146,7 +160,7 @@ namespace DataConverter
                 }
                 else
                 {
-                    if (!goodTimes.Contains(sesSpan))
+                    if (!goodTimes.Contains(sessionEvent.T.TotalMilliseconds))
                     {
                         sessionEvent.PrevGood = last;
                         badEvents.Add(sessionEvent);
@@ -173,8 +187,19 @@ namespace DataConverter
                 interpX = Interpolate.Linear(goodTimes, goodEventsX);
                 interpY = Interpolate.Linear(goodTimes, goodEventsY);
             }
+            else if (goodTimes.Count > 0)
+            {
+                foreach (var badEvent in badEvents)
+                {
+                    badEvent.X = (short)goodEventsX.First();
+                    badEvent.Y = (short)goodEventsY.First();
+                }
+  
+                return;
+            }
             else
             {
+                //Debugger.Break();
                 foreach (var badEvent in badEvents)
                 {
                     badEvent.X = 0;
@@ -190,11 +215,8 @@ namespace DataConverter
 
                 //if (badEvent.id == 6843 || badEvent.id == 6844 || badEvent.id == 7305)
                 //    Debugger.Break();
-
-                double sesSpan = (badEvent.EventDateTime - firstDate).TotalMilliseconds;
-
-                double intX = interpX.Interpolate(sesSpan);
-                double intY = interpY.Interpolate(sesSpan);
+                double intX = interpX.Interpolate(badEvent.T.TotalMilliseconds);
+                double intY = interpY.Interpolate(badEvent.T.TotalMilliseconds);
 
                 Debug.Assert(!double.IsInfinity(intX));
                 Debug.Assert(!double.IsInfinity(intY));
